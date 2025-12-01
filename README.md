@@ -1,4 +1,4 @@
-# KyleHub Ops Stack
+# <img src="logo.png" alt="KyleHub Logo" width="40" height="40" align="center"> KyleHub Ops Stack
 
 Infrastructure as Code repository for the KyleHub network. This repository contains container orchestration configurations, setup scripts, and service definitions.
 
