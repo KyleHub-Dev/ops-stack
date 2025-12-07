@@ -5,7 +5,7 @@ services:
     restart: always
     container_name: traefik
     command:
-      # Security: API & Dashboard nicht öffentlich
+      # Security: API & Dashboard not public
       - "--api.insecure=false"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
@@ -15,12 +15,12 @@ services:
       # HTTP -> HTTPS Redirect
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      # Let's Encrypt Config (HTTP Challenge für Cloudflare Full Strict)
+      # Let's Encrypt Config (HTTP Challenge for Cloudflare Full Strict)
       - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
       - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
-      # Wichtig für Zitadel gRPC/HTTP2 Performance
+      # Important for Zitadel gRPC/HTTP2 Performance
       - "--serversTransport.insecureSkipVerify=true"
     ports:
       - "80:80"
@@ -33,22 +33,38 @@ services:
 
   # --- Zitadel (Identity Provider) ---
   zitadel:
-    image: zitadel/zitadel:v2.50.0 # Prüfe auf hub.docker.com nach neuerer Version
+    image: ghcr.io/zitadel/zitadel:${ZITADEL_IMAGE_TAG:-latest}
     restart: always
     container_name: zitadel
     command: 'start-from-init --masterkey "${ZITADEL_MASTERKEY}"'
+    user: "0" # Required for PAT file exchange in /current-dir
     environment:
-      # DB Connection
+      # DB Connection (Admin & User)
       - ZITADEL_DATABASE_POSTGRES_HOST=db
       - ZITADEL_DATABASE_POSTGRES_PORT=5432
       - ZITADEL_DATABASE_POSTGRES_DATABASE=${POSTGRES_DB}
-      - ZITADEL_DATABASE_POSTGRES_USER=${POSTGRES_USER}
-      - ZITADEL_DATABASE_POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - ZITADEL_DATABASE_POSTGRES_SSL_MODE=disable
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME=${POSTGRES_USER}
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD=${POSTGRES_PASSWORD}
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE=disable
+      - ZITADEL_DATABASE_POSTGRES_USER_USERNAME=${POSTGRES_USER}
+      - ZITADEL_DATABASE_POSTGRES_USER_PASSWORD=${POSTGRES_PASSWORD}
+      - ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE=disable
+      
       # Domain Settings
       - ZITADEL_EXTERNALPORT=443
       - ZITADEL_EXTERNALDOMAIN=${DOMAIN}
       - ZITADEL_EXTERNALSECURE=true
+      - ZITADEL_TLS_ENABLED=false
+
+      # Login V2 Configuration
+      - ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH=/current-dir/login-client.pat
+      - ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED=true
+      - ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI=https://${DOMAIN}/ui/v2/login
+      - ZITADEL_OIDC_DEFAULTLOGINURLV2=https://${DOMAIN}/ui/v2/login/login?authRequest=
+      - ZITADEL_OIDC_DEFAULTLOGOUTURLV2=https://${DOMAIN}/ui/v2/login/logout?post_logout_redirect=
+      - ZITADEL_SAML_DEFAULTLOGINURLV2=https://${DOMAIN}/ui/v2/login/login?samlRequest=
+    volumes:
+      - .:/current-dir:delegated
     depends_on:
       db:
         condition: service_healthy
@@ -56,14 +72,41 @@ services:
       - zitadel-net
     labels:
       - "traefik.enable=true"
+      
+      # Router 1: Main Zitadel (API, Console, etc.) -> Port 8080 (h2c)
       - "traefik.http.routers.zitadel.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.zitadel.entrypoints=websecure"
       - "traefik.http.routers.zitadel.tls.certresolver=myresolver"
-      # H2C (HTTP/2 Cleartext) ist entscheidend für gRPC
       - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
       - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
+      
+      # Router 2: Login V2 UI -> Port 3000 (http)
+      # Specific rule for the new Login UI path
+      - "traefik.http.routers.zitadel-login.rule=Host(`${DOMAIN}`) && PathPrefix(`/ui/v2/login`)"
+      - "traefik.http.routers.zitadel-login.entrypoints=websecure"
+      - "traefik.http.routers.zitadel-login.tls.certresolver=myresolver"
+      - "traefik.http.services.zitadel-login.loadbalancer.server.scheme=http"
+      - "traefik.http.services.zitadel-login.loadbalancer.server.port=3000"
 
-  # --- PostgreSQL (Datenbank) ---
+  # --- Zitadel Login V2 (Sidecar) ---
+  login:
+    image: ghcr.io/zitadel/zitadel-login:${ZITADEL_LOGIN_IMAGE_TAG:-latest}
+    restart: always
+    container_name: zitadel_login
+    environment:
+      - ZITADEL_API_URL=http://localhost:8080
+      - NEXT_PUBLIC_BASE_PATH=/ui/v2/login
+      - ZITADEL_SERVICE_USER_TOKEN_FILE=/current-dir/login-client.pat
+    network_mode: service:zitadel
+    user: "0"
+    volumes:
+      - .:/current-dir:ro
+    depends_on:
+      zitadel:
+        condition: service_healthy
+        restart: false
+
+  # --- PostgreSQL (Database) ---
   db:
     image: postgres:17-alpine
     restart: always

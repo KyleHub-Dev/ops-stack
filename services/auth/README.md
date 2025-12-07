@@ -1,6 +1,6 @@
 # Zitadel Auth-Server Setup
 
-Dies ist die Dokumentation für den Aufbau des zentralen Authentifizierungs-Servers.
+This is the documentation for setting up the central authentication server.
 
 **Stack:**
 
@@ -13,24 +13,24 @@ Dies ist die Dokumentation für den Aufbau des zentralen Authentifizierungs-Serv
 
 -----
 
-## Schritt 1: Server Initialisierung (Hetzner)
+## Step 1: Server Initialization (Hetzner)
 
-1.  Wähle im Hetzner Panel das Image **Debian 13** aus.
-2.  Füge deinen **SSH-Key** hinzu (Logge dich niemals mit Passwort ein).
-3.  Erstelle den Server.
+1.  Select the **Debian 13** image in the Hetzner Panel.
+2.  Add your **SSH Key** (Never log in with a password).
+3.  Create the server.
 
 ### 1.1 Server Setup
 
-Führe die **Server Setup** Schritte aus der Haupt-README (`/README.md`) aus. Diese beinhalten:
+Execute the **Server Setup** steps from the main README (`/README.md`). These include:
 *   System Updates
-*   Installation von Tools (curl, git, nano, htop, fail2ban)
+*   Installation of tools (curl, git, nano, htop, fail2ban)
 *   Docker Installation
 
 -----
 
-## Schritt 2: Repository Setup
+## Step 2: Repository Setup
 
-Wir klonen das gesamte Repository nach `/opt/ops-stack`. Da das Repo klein ist, ist dies der einfachste Weg.
+We clone the entire repository to `/opt/ops-stack`. Since the repo is small, this is the easiest way.
 
 ```bash
 cd /opt
@@ -38,29 +38,29 @@ git clone https://github.com/KyleHub-Dev/ops-stack.git
 cd ops-stack/services/auth
 ```
 
-## Schritt 3: Konfiguration
+## Step 3: Configuration
 
-### 3.1 Ordnerstruktur
+### 3.1 Directory Structure
 
-Erstelle die lokalen Ordner für persistente Daten (diese werden nicht mit git synchronisiert):
+Create local directories for persistent data (these are not synchronized with git):
 
 ```bash
 mkdir -p letsencrypt
 mkdir -p data/postgres
 ```
 
-### 3.2 Environment Variablen
+### 3.2 Environment Variables
 
-Kopiere die Beispiel-Konfiguration und passe sie an:
+Copy the example configuration and adjust it:
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-### 3.3 Permissions setzen
+### 3.3 Set Permissions
 
-Traefik benötigt eine leere Datei mit restriktiven Rechten, sonst startet der Container nicht.
+Traefik requires an empty file with restrictive permissions, otherwise the container will not start.
 
 ```bash
 touch ./letsencrypt/acme.json
@@ -69,56 +69,56 @@ chmod 600 ./letsencrypt/acme.json
 
 -----
 
-## Schritt 4: Cloudflare & Firewall Konfiguration
+## Step 4: Cloudflare & Firewall Configuration
 
-Um den Server "stealthy" zu machen:
+To make the server "stealthy":
 
-1.  **Cloudflare DNS:** Setze einen A-Record für deine Subdomain auf die Server-IP. Proxy Status: **Orange (Proxied)**.
-2.  **Cloudflare SSL:** Setze SSL/TLS auf **"Full (Strict)"**.
+1.  **Cloudflare DNS:** Set an A-Record for your subdomain to the server IP. Proxy Status: **Orange (Proxied)**.
+2.  **Cloudflare SSL:** Set SSL/TLS to **"Full (Strict)"**.
 3.  **Hetzner Cloud Firewall:**
-      * Erstelle eine Firewall im Hetzner Panel.
+      * Create a Firewall in the Hetzner Panel.
       * **Inbound:**
-          * TCP 22 (SSH): Nur deine eigene IP.
-          * TCP 80 & 443 (Web): **Nur Cloudflare IPs erlauben** (Liste: [https://www.cloudflare.com/ips-v4](https://www.cloudflare.com/ips-v4)).
-      * Wende die Firewall auf den Server an.
+          * TCP 22 (SSH): Only your own IP.
+          * TCP 80 & 443 (Web): **Allow only Cloudflare IPs** (List: [https://www.cloudflare.com/ips-v4](https://www.cloudflare.com/ips-v4)).
+      * Apply the Firewall to the server.
 
 -----
 
-## Schritt 5: Start
+## Step 5: Start
 
 ```bash
 cd /opt/ops-stack/services/auth
 docker compose up -d
 ```
 
-Warte ca. 1-2 Minuten beim ersten Start (Datenbank-Initialisierung). Prüfe die Logs mit:
+Wait approx. 1-2 minutes for the first start (Database initialization). Check the logs with:
 
 ```bash
 docker compose logs -f zitadel
 ```
 
-Sobald Zitadel läuft, erreichst du es unter: `https://auth.deinedomain.de/ui/console`
+Once Zitadel is running, you can reach it at: `https://auth.yourdomain.com/ui/console`
 
 -----
 
-## Schritt 6: Backups & Updates
+## Step 6: Backups & Updates
 
 ### Backup Script
 
-Erstelle `/opt/ops-stack/services/auth/backup.sh` und lasse es via Cronjob (`crontab -e`) täglich laufen.
+Create `/opt/ops-stack/services/auth/backup.sh` and run it daily via Cronjob (`crontab -e`).
 
 ```bash
 #!/bin/bash
 BACKUP_DIR="/opt/ops-stack/services/auth/backups"
 mkdir -p $BACKUP_DIR
 docker exec zitadel_db pg_dump -U zitadel -d zitadel > "$BACKUP_DIR/db_backup_$(date +%F).sql"
-# Lösche Backups älter als 7 Tage
+# Delete backups older than 7 days
 find $BACKUP_DIR -type f -name "*.sql" -mtime +7 -delete
 ```
 
 ### Updates
 
-Um auf die neuesten Versionen von Debian 13 oder Docker Images zu aktualisieren:
+To update to the latest versions of Debian 13 or Docker Images:
 
 ```bash
 apt update && apt upgrade -y
