@@ -14,6 +14,7 @@
 *.crt
 *.p12
 *.pfx
+*.pat
 
 # Data directories
 data/
