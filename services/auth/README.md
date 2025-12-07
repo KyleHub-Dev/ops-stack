@@ -30,10 +30,10 @@ Execute the **Server Setup** steps from the main README (`/README.md`). These in
 
 ## Step 2: Repository Setup
 
-We clone the entire repository to `/opt/ops-stack`. Since the repo is small, this is the easiest way.
+We clone the entire repository to your home directory (`~/ops-stack`).
 
 ```bash
-cd /opt
+cd ~
 git clone https://github.com/KyleHub-Dev/ops-stack.git
 cd ops-stack/services/auth
 ```
@@ -87,7 +87,7 @@ To make the server "stealthy":
 ## Step 5: Start
 
 ```bash
-cd /opt/ops-stack/services/auth
+cd ~/ops-stack/services/auth
 docker compose up -d
 ```
 
@@ -105,11 +105,11 @@ Once Zitadel is running, you can reach it at: `https://auth.yourdomain.com/ui/co
 
 ### Backup Script
 
-Create `/opt/ops-stack/services/auth/backup.sh` and run it daily via Cronjob (`crontab -e`).
+Create `~/ops-stack/services/auth/backup.sh` and run it daily via Cronjob (`crontab -e`).
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/opt/ops-stack/services/auth/backups"
+BACKUP_DIR="$HOME/ops-stack/services/auth/backups"
 mkdir -p $BACKUP_DIR
 docker exec zitadel_db pg_dump -U zitadel -d zitadel > "$BACKUP_DIR/db_backup_$(date +%F).sql"
 # Delete backups older than 7 days
@@ -121,8 +121,8 @@ find $BACKUP_DIR -type f -name "*.sql" -mtime +7 -delete
 To update to the latest versions of Debian 13 or Docker Images:
 
 ```bash
-apt update && apt upgrade -y
-cd /opt/ops-stack/services/auth
+sudo apt update && sudo apt upgrade -y
+cd ~/ops-stack/services/auth
 docker compose pull
 docker compose up -d
 docker image prune -f
