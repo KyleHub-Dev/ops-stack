@@ -87,7 +87,7 @@ Um den Server "stealthy" zu machen:
 ## Schritt 5: Start
 
 ```bash
-cd /opt/auth-stack
+cd /opt/ops-stack/services/auth
 docker compose up -d
 ```
 
@@ -105,11 +105,11 @@ Sobald Zitadel läuft, erreichst du es unter: `https://auth.deinedomain.de/ui/co
 
 ### Backup Script
 
-Erstelle `/opt/auth-stack/backup.sh` und lasse es via Cronjob (`crontab -e`) täglich laufen.
+Erstelle `/opt/ops-stack/services/auth/backup.sh` und lasse es via Cronjob (`crontab -e`) täglich laufen.
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/opt/auth-stack/backups"
+BACKUP_DIR="/opt/ops-stack/services/auth/backups"
 mkdir -p $BACKUP_DIR
 docker exec zitadel_db pg_dump -U zitadel -d zitadel > "$BACKUP_DIR/db_backup_$(date +%F).sql"
 # Lösche Backups älter als 7 Tage
@@ -122,7 +122,7 @@ Um auf die neuesten Versionen von Debian 13 oder Docker Images zu aktualisieren:
 
 ```bash
 apt update && apt upgrade -y
-cd /opt/auth-stack
+cd /opt/ops-stack/services/auth
 docker compose pull
 docker compose up -d
 docker image prune -f

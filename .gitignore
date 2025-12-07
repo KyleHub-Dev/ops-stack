@@ -18,6 +18,10 @@
 # Data directories
 data/
 */data/
+letsencrypt/
+*/letsencrypt/
+backups/
+*/backups/
 
 # Docker
 docker-compose.override.yml
