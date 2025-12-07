@@ -1,0 +1,87 @@
+services:
+  # --- Traefik (Reverse Proxy) ---
+  traefik:
+    image: traefik:v3.0
+    restart: always
+    container_name: traefik
+    command:
+      # Security: API & Dashboard nicht öffentlich
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      # Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # HTTP -> HTTPS Redirect
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      # Let's Encrypt Config (HTTP Challenge für Cloudflare Full Strict)
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      # Wichtig für Zitadel gRPC/HTTP2 Performance
+      - "--serversTransport.insecureSkipVerify=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - zitadel-net
+
+  # --- Zitadel (Identity Provider) ---
+  zitadel:
+    image: zitadel/zitadel:v2.50.0 # Prüfe auf hub.docker.com nach neuerer Version
+    restart: always
+    container_name: zitadel
+    command: 'start-from-init --masterkey "${ZITADEL_MASTERKEY}"'
+    environment:
+      # DB Connection
+      - ZITADEL_DATABASE_POSTGRES_HOST=db
+      - ZITADEL_DATABASE_POSTGRES_PORT=5432
+      - ZITADEL_DATABASE_POSTGRES_DATABASE=${POSTGRES_DB}
+      - ZITADEL_DATABASE_POSTGRES_USER=${POSTGRES_USER}
+      - ZITADEL_DATABASE_POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - ZITADEL_DATABASE_POSTGRES_SSL_MODE=disable
+      # Domain Settings
+      - ZITADEL_EXTERNALPORT=443
+      - ZITADEL_EXTERNALDOMAIN=${DOMAIN}
+      - ZITADEL_EXTERNALSECURE=true
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - zitadel-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.zitadel.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.zitadel.entrypoints=websecure"
+      - "traefik.http.routers.zitadel.tls.certresolver=myresolver"
+      # H2C (HTTP/2 Cleartext) ist entscheidend für gRPC
+      - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
+      - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
+
+  # --- PostgreSQL (Datenbank) ---
+  db:
+    image: postgres:17-alpine
+    restart: always
+    container_name: zitadel_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zitadel-net
+
+networks:
+  zitadel-net:
+    driver: bridge
