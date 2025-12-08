@@ -22,7 +22,7 @@ services:
 
   # --- Zitadel (Identity Provider) ---
   zitadel:
-    image: ghcr.io/zitadel/zitadel:v4.7.0-debug
+    image: ghcr.io/zitadel/zitadel:v4.7.1
     restart: always
     container_name: zitadel
     command: 'start-from-init --masterkey "${ZITADEL_MASTERKEY}"'
@@ -92,7 +92,7 @@ services:
 
   # --- Zitadel Login V2 (Sidecar) ---
   login:
-    image: ghcr.io/zitadel/zitadel-login:v4.7.0
+    image: ghcr.io/zitadel/zitadel-login:v4.7.1
     restart: always
     container_name: zitadel_login
     environment:
