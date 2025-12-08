@@ -24,6 +24,16 @@ letsencrypt/
 backups/
 */backups/
 
+# Keep directories but ignore their contents while still tracking .gitkeep placeholders
+# This allows empty directories to be present in the repo via .gitkeep files without
+# committing any other generated data in those directories.
+!**/data/
+!**/data/.gitkeep
+!**/letsencrypt/
+!**/letsencrypt/.gitkeep
+!**/backups/
+!**/backups/.gitkeep
+
 # Docker
 docker-compose.override.yml
 .dockerignore
@@ -51,3 +61,7 @@ logs/
 # Backup files
 *.bak
 *.backup
+
+# Gitkeep files
+!.gitkeep
+!**/*.gitkeep
