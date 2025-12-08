@@ -17,16 +17,11 @@
 *.pat
 
 # Data directories
-data/*
-*/data/*
-letsencrypt/*
-*/letsencrypt/*
-backups/*
-*/backups/*
-postgres/*
-*/postgres/*
-redis/*
-*/redis/*
+**/data/*
+**/letsencrypt/*
+**/backups/*
+**/postgres/*
+**/redis/*
 
 # Gitkeep exceptions
 !.gitkeep
