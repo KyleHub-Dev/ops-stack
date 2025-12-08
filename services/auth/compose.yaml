@@ -75,6 +75,7 @@ services:
       - "traefik.http.routers.zitadel.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.zitadel.entrypoints=websecure"
       - "traefik.http.routers.zitadel.tls.certresolver=myresolver"
+      - "traefik.http.routers.zitadel.priority=1"
       - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
       - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
 
@@ -83,6 +84,7 @@ services:
       - "traefik.http.routers.zitadel-login.rule=Host(`${DOMAIN}`) && PathPrefix(`/ui/v2/login`)"
       - "traefik.http.routers.zitadel-login.entrypoints=websecure"
       - "traefik.http.routers.zitadel-login.tls.certresolver=myresolver"
+      - "traefik.http.routers.zitadel-login.priority=100"
       - "traefik.http.services.zitadel-login.loadbalancer.server.scheme=http"
       - "traefik.http.services.zitadel-login.loadbalancer.server.port=3000"
 

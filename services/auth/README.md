@@ -42,7 +42,13 @@ cd ops-stack/services/auth
 
 ### 3.1 Directory Structure
 
-`letsencrypt/` and `data/postgres/` are already present in the repo via `.gitkeep` placeholders and their contents are gitignored. If you ever need to recreate them locally, run:
+`letsencrypt/` and `data/` are already present in the repo via `.gitkeep` placeholders and their contents are gitignored.
+
+```bash
+mkdir data/postgres
+```
+
+If you ever need to recreate them locally, run:
 
 ```bash
 mkdir -p letsencrypt data/postgres
