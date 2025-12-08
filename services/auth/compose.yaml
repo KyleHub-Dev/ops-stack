@@ -57,8 +57,10 @@ services:
       - ZITADEL_OIDC_DEFAULTLOGINURLV2=https://${DOMAIN}/ui/v2/login/login?authRequest=
       - ZITADEL_OIDC_DEFAULTLOGOUTURLV2=https://${DOMAIN}/ui/v2/login/logout?post_logout_redirect=
       - ZITADEL_SAML_DEFAULTLOGINURLV2=https://${DOMAIN}/ui/v2/login/login?samlRequest=
+
+      - ZITADEL_DEFAULTINSTANCE_TRUSTEDDOMAINS=localhost
     healthcheck:
-      test: ["CMD", "/app/zitadel", "ready"]
+      test: [ "CMD", "/app/zitadel", "ready" ]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -122,7 +124,7 @@ services:
     volumes:
       - ./data/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
