@@ -42,11 +42,10 @@ cd ops-stack/services/auth
 
 ### 3.1 Directory Structure
 
-Create local directories for persistent data (these are not synchronized with git):
+`letsencrypt/` and `data/postgres/` are already present in the repo via `.gitkeep` placeholders and their contents are gitignored. If you ever need to recreate them locally, run:
 
 ```bash
-mkdir -p letsencrypt
-mkdir -p data/postgres
+mkdir -p letsencrypt data/postgres
 ```
 
 ### 3.2 Environment Variables
@@ -66,6 +65,10 @@ Traefik requires an empty file with restrictive permissions, otherwise the conta
 touch ./letsencrypt/acme.json
 chmod 600 ./letsencrypt/acme.json
 ```
+
+### 3.4 Traefik Configuration Files
+
+Static Traefik settings now live in `traefik/traefik.yml` and dynamic options (TLS defaults, optional middlewares) in `traefik/dynamic/dynamic.yml`. The ACME email still comes from your `.env` via `ACME_EMAIL`, so you only need to edit the YAML files if you want to adjust entrypoints, certificate resolver behavior, or middlewares.
 
 -----
 
