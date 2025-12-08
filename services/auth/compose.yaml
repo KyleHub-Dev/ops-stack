@@ -8,6 +8,8 @@ services:
     container_name: traefik
     environment:
       - TRAEFIK_CERTIFICATESRESOLVERS_MYRESOLVER_ACME_EMAIL=${ACME_EMAIL}
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
     command:
       - "--configFile=/etc/traefik/traefik.yml"
     ports:

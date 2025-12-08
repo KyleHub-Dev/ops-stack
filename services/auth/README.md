@@ -80,11 +80,18 @@ Static Traefik settings now live in `traefik/traefik.yml` and dynamic options (T
 
 ## Step 4: Cloudflare & Firewall Configuration
 
-To make the server "stealthy":
+To make the server "stealthy" and enable SSL via DNS Challenge:
 
 1.  **Cloudflare DNS:** Set an A-Record for your subdomain to the server IP. Proxy Status: **Orange (Proxied)**.
 2.  **Cloudflare SSL:** Set SSL/TLS to **"Full (Strict)"**.
-3.  **Hetzner Cloud Firewall:**
+3.  **Cloudflare API Token:**
+      * Go to [Cloudflare Profile > API Tokens](https://dash.cloudflare.com/profile/api-tokens).
+      * Click **Create Token**.
+      * Use the **Edit Zone DNS** template.
+      * Select your domain in **Zone Resources**.
+      * Copy the token and add it to your `.env` file as `CF_DNS_API_TOKEN`.
+      * Ensure `CF_API_EMAIL` matches your Cloudflare account email.
+4.  **Hetzner Cloud Firewall:**
       * Create a Firewall in the Hetzner Panel.
       * **Inbound:**
           * TCP 22 (SSH): Only your own IP.

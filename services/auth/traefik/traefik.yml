@@ -31,10 +31,13 @@ entryPoints:
 certificatesResolvers:
   myresolver:
     acme:
-      email: admin@yourdomain.com
+      # Email provided via environment variable: TRAEFIK_CERTIFICATESRESOLVERS_MYRESOLVER_ACME_EMAIL
       storage: /letsencrypt/acme.json
-      httpChallenge:
-        entryPoint: web
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
 
 serversTransport:
   insecureSkipVerify: true
