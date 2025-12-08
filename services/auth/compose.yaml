@@ -82,16 +82,6 @@ services:
       - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
       - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
 
-      # Router 2: Login V2 UI -> Port 3000 (http)
-      # Specific rule for the new Login UI path
-      - "traefik.http.routers.zitadel-login.rule=Host(`${DOMAIN}`) && PathPrefix(`/ui/v2/login`)"
-      - "traefik.http.routers.zitadel-login.entrypoints=websecure"
-      - "traefik.http.routers.zitadel-login.tls.certresolver=myresolver"
-      - "traefik.http.routers.zitadel-login.priority=100"
-      - "traefik.http.routers.zitadel-login.service=zitadel-login"
-      - "traefik.http.services.zitadel-login.loadbalancer.server.scheme=http"
-      - "traefik.http.services.zitadel-login.loadbalancer.server.port=3000"
-
   # --- Zitadel Login V2 (Sidecar) ---
   # Based on: https://zitadel.com/docs/self-hosting/manage/reverseproxy/nginx
   login:
@@ -115,6 +105,14 @@ services:
       zitadel:
         condition: service_healthy
         restart: false
+    labels:
+      # Traefik configuration for Login V2 UI
+      - "traefik.enable=true"
+      - "traefik.http.routers.zitadel-login.rule=Host(`${DOMAIN}`) && PathPrefix(`/ui/v2/login`)"
+      - "traefik.http.routers.zitadel-login.entrypoints=websecure"
+      - "traefik.http.routers.zitadel-login.tls.certresolver=myresolver"
+      - "traefik.http.routers.zitadel-login.priority=100"
+      - "traefik.http.services.zitadel-login.loadbalancer.server.port=3000"
 
   # --- PostgreSQL (Database) ---
   db:
