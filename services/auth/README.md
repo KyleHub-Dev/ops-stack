@@ -117,21 +117,6 @@ Once Zitadel is running, you can reach it at: `https://auth.yourdomain.com/ui/co
 
 -----
 
-## Step 6: Backups & Updates
-
-### Backup Script
-
-Create `~/ops-stack/services/auth/backup.sh` and run it daily via Cronjob (`crontab -e`).
-
-```bash
-#!/bin/bash
-BACKUP_DIR="$HOME/ops-stack/services/auth/backups"
-mkdir -p $BACKUP_DIR
-docker exec zitadel_db pg_dump -U zitadel -d zitadel > "$BACKUP_DIR/db_backup_$(date +%F).sql"
-# Delete backups older than 7 days
-find $BACKUP_DIR -type f -name "*.sql" -mtime +7 -delete
-```
-
 ### Updates
 
 To update to the latest versions of Debian 13 or Docker Images:
@@ -143,3 +128,25 @@ docker compose pull
 docker compose up -d
 docker image prune -f
 ```
+
+-----
+
+## Manual Email Verification
+
+If SMTP is not configured or you need to manually verify a user's email address, you can do so directly in the database.
+
+**1. Find the user by email or user_id:**
+
+```bash
+docker compose exec -it db psql -U zitadel -d zitadel -c \
+  "SELECT user_id, email, is_email_verified FROM projections.users14_humans WHERE email = 'user@example.com';"
+```
+
+**2. Set the email as verified:**
+
+```bash
+docker compose exec -it db psql -U zitadel -d zitadel -c \
+  "UPDATE projections.users14_humans SET is_email_verified = TRUE WHERE user_id = '<USER_ID>';"
+```
+
+Replace `<USER_ID>` with the actual user ID from step 1.
