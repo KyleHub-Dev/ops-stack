@@ -18,17 +18,18 @@ To ensure reliability and compatibility, we use a 3-Tier Architecture:
 
 1.  **Application (e.g., Zitadel):** Connects to `localhost:25` (standard, unencrypted). Simple and fast.
 2.  **Middleware (Postfix):**
-    *   Listens on `localhost:25`.
+    *   Listens on `localhost:25` (and Docker network interface).
     *   Queues mail (prevents data loss if Bridge is busy).
     *   Translates simple traffic into the complex encrypted authentication required by the Bridge.
+    *   **Authentication:** Accepts SASL authentication from local apps (like Zitadel) using a local Linux user.
 3.  **Proton Mail Bridge:**
     *   Listens on `localhost:1025`.
     *   Encrypts mail and sends it to Proton servers.
 
 ```mermaid
 graph LR
-    A[Zitadel / Apps] -- SMTP (No Auth) --> B(Postfix Relay :25)
-    B -- SMTP (Auth + TLS) --> C(Proton Mail Bridge :1025)
+    A[Zitadel / Apps] -- SMTP (Auth: zitadel) --> B(Postfix Relay :25)
+    B -- SMTP (Auth: proton + TLS) --> C(Proton Mail Bridge :1025)
     C -- Encrypted Tunnel --> D[Proton Mail Cloud]
 ```
 
@@ -47,7 +48,7 @@ sudo apt update && sudo apt install -y pass gnupg
 ### 2. Download & Install Bridge
 Download the latest `.deb` from the [Proton Bridge Release Page](https://proton.me/mail/bridge).
 ```bash
-wget https://proton.me/download/bridge/protonmail-bridge_3.12.0-1_amd64.deb -O proton-bridge.deb
+wget https://proton.me/download/bridge/protonmail-bridge_3.21.2-1_amd64.deb -O proton-bridge.deb
 sudo dpkg -i proton-bridge.deb
 rm proton-bridge.deb
 ```
@@ -128,23 +129,54 @@ sudo systemctl enable --now proton-bridge
 
 We use Postfix to "bridge the bridge". It accepts mail easily and handles the hard work of talking to Proton.
 
-### 1. Install Postfix
+### 1. Install Postfix & SASL
 During installation, select **"Satellite system"**.
 *   **System mail name:** (e.g., `hostname.yourdomain.com`)
 *   **SMTP relay host:** `[127.0.0.1]:1025`
 
 ```bash
-sudo apt install -y postfix libsasl2-modules
+sudo apt install -y postfix libsasl2-modules sasl2-bin
 ```
 
-### 2. Configure Authentication
-Create the password map file. Replace with the credentials you got from the Bridge CLI (Step 5 above).
+### 2. Configure Incoming Authentication (SASL)
+Many Docker apps (like Zitadel) require authentication to send email. We set up a local user for this.
+
+**A. Create User:**
+```bash
+sudo useradd zitadel
+sudo passwd zitadel
+# Set a password (e.g., "zitadel")
+```
+
+**B. Configure SASL Daemon:**
+1.  Edit `/etc/postfix/sasl/smtpd.conf`. Content: **See `mail/smtpd.conf.example`**.
+2.  Edit `/etc/default/saslauthd`. Content: **See `mail/saslauthd.example`**.
+
+**C. Fix PID File Location (Crucial for Systemd):**
+The custom run path requires a systemd override.
+```bash
+sudo systemctl edit saslauthd
+```
+Paste this content:
+```ini
+[Service]
+PIDFile=/var/spool/postfix/var/run/saslauthd/saslauthd.pid
+```
+
+**D. Permissions & Restart SASL:**
+```bash
+sudo mkdir -p /var/spool/postfix/var/run/saslauthd
+sudo chown -R root:sasl /var/spool/postfix/var/run/saslauthd
+sudo chmod 710 /var/spool/postfix/var/run/saslauthd
+sudo adduser postfix sasl
+sudo systemctl restart saslauthd
+```
+
+### 3. Configure Outgoing Authentication (Bridge)
+Create the password map file with credentials from the Bridge CLI (Phase 1, Step 5).
 
 `sudo nano /etc/postfix/sasl_passwd`
-
-```text
-[127.0.0.1]:1025    admin@yourdomain.com:YOUR_GENERATED_BRIDGE_PASSWORD
-```
+Content: **See `mail/sasl_passwd.example`**.
 
 **Secure and Hash the file:**
 ```bash
@@ -152,29 +184,36 @@ sudo chmod 600 /etc/postfix/sasl_passwd
 sudo postmap /etc/postfix/sasl_passwd
 ```
 
-### 3. Configure `main.cf`
-Edit `/etc/postfix/main.cf` to ensure it relays correctly. Ensure these lines exist and are modified:
+### 4. Configure `main.cf`
+Edit `/etc/postfix/main.cf` to bind everything together. Ensure these lines exist:
 
 ```bash
 # RELAY CONFIGURATION
 # The brackets [] prevent DNS lookups (crucial for localhost)
 relayhost = [127.0.0.1]:1025
 
-# AUTHENTICATION
+# AUTHENTICATION (Outgoing to Bridge)
 smtp_sasl_auth_enable = yes
 smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
 smtp_sasl_security_options = noanonymous
 
-# TLS SETTINGS (Must be 'may' to accept Bridge's self-signed cert)
+# TLS SETTINGS (Outgoing to Bridge)
 smtp_tls_security_level = may
 
 # NETWORK SECURITY
 # Only allow this server (localhost) to send mail
-mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
-inet_interfaces = loopback-only
-```
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128 172.18.0.0/16
+inet_interfaces = all
 
-### 4. Restart Postfix
+# AUTHENTICATION (Incoming from local clients like Zitadel)
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_local_domain = $myhostname
+broken_sasl_auth_clients = yes
+```
+**Note:** `myhostname` should be set to `auth.kylehub.dev` in your `/etc/postfix/main.cf`.
+
+### 5. Restart Postfix
 ```bash
 sudo systemctl restart postfix
 ```
@@ -183,14 +222,14 @@ sudo systemctl restart postfix
 
 ## Phase 3: Integration (Zitadel & Others)
 
-Now that Postfix is listening on port 25, integrating applications is easy. They don't need to know about Proton Mail, encryption, or complex auth. They just see a standard open SMTP server.
+Now that Postfix is accepting auth, configure your apps.
 
 ### General Configuration for ANY App
-*   **SMTP Host:** `127.0.0.1` (or the Docker host IP if running in container)
+*   **SMTP Host:** `172.18.0.1` (Docker Bridge Gateway IP) or `127.0.0.1` (if local).
 *   **SMTP Port:** `25`
-*   **TLS/SSL:** `None` / `False` (Security is handled by local loopback trust)
-*   **Username:** (Leave Empty)
-*   **Password:** (Leave Empty)
+*   **TLS/SSL:** `None` / `False` / `Off`
+*   **Username:** `zitadel`
+*   **Password:** `zitadel` (The password you set in Phase 2, Step 2A).
 *   **Sender Address:** **MUST** match an active address or alias in your Proton account (e.g., `noreply@yourdomain.com`).
 
 ### Specific: Zitadel Configuration
@@ -198,18 +237,14 @@ If configuring via the Zitadel Console or `defaults.yaml`:
 
 ```yaml
 SMTPConfiguration:
-  Host: "172.17.0.1" # Use 'host.docker.internal' or the Docker Bridge Gateway IP if Zitadel is in Docker
+  Host: "172.18.0.1"
   Port: 25
   SenderName: "Zitadel Identity"
-  SenderAddress: "noreply@yourdomain.com" # Must match authenticated user/alias
+  SenderAddress: "noreply@yourdomain.com"
   TLS: false
+  User: "zitadel"
+  Password: "zitadel"
 ```
-
-### How to Extend to Other Apps
-Follow the "General Configuration" above.
-*   **GitLab:** Set `gitlab_rails['smtp_address'] = "127.0.0.1"` and `smtp_port = 25`.
-*   **Grafana:** Set `[smtp] host = 127.0.0.1:25`, `skip_verify = true`.
-*   **Cron/System Alerts:** They typically default to `localhost:25`, so they will start working automatically.
 
 ---
 
@@ -227,3 +262,5 @@ Follow the "General Configuration" above.
 3.  **Troubleshooting:**
     *   **Error:** *Client host rejected: Access denied* -> Check `mynetworks` in `main.cf`.
     *   **Error:** *Certificate verification failed* -> Ensure `smtp_tls_security_level = may` in `main.cf`.
+    *   **Error:** `File has unexpected size` or `Mirror sync in progress?` during `sudo apt update` -> This indicates a temporary issue with a specific package mirror. The core `apt install` command may still succeed. If not, try clearing the apt lists cache: `sudo rm -rf /var/lib/apt/lists/* && sudo apt update`.
+    *   **Error:** `dpkg: dependency problems prevent configuration of protonmail-bridge` -> If `sudo dpkg -i proton-bridge.deb` fails due to unmet dependencies, run `sudo apt install -f` to install the missing packages and configure the bridge. Then, re-run `sudo dpkg -i proton-bridge.deb` to complete the installation.
